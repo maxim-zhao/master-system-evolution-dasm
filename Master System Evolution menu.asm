@@ -164,8 +164,8 @@ _RAM_FFFF_ db
 .ende
 
 ; Ports
-.define _PORT_61_ $61
-.define _PORT_62_ $62
+.define _PORT_61_MapperLowByte $61
+.define _PORT_62_MapperHighByte $62
 .define _PORT_63_ $63
 .define _PORT_7E_ $7E
 .define Port_PSG $7F
@@ -178,8 +178,8 @@ _RAM_FFFF_ db
 .define Port_VDPData $BE
 .define Port_VDPAddress $BF
 .define _PORT_C8_ $C8
-.define _PORT_CA_ $CA
-.define _PORT_CB_ $CB
+.define _PORT_CA_MapperLowByteCopy $CA
+.define _PORT_CB_MapperHighByteCopy $CB
 .define _PORT_CD_ $CD
 .define _PORT_CE_ $CE
 .define _PORT_DC_ $DC
@@ -399,14 +399,93 @@ _DATA_3C0_:
 ; Data from 3F9 to 631 (569 bytes)
 _DATA_3F9_:
 .dsb 263, $FF
-.db $F3 $CD $5A $05 $32 $FE $3F $C3 $75 $00 $CD $5A $05 $32 $FE $3F
-.db $C3 $17 $0D $CD $5A $05 $32 $FE $3F $C3 $F8 $01 $CD $5A $05 $32
-.db $FE $3F $C3 $E9 $7F $F3 $CD $5A $05 $32 $FE $3F $C3 $E9 $7F $CD
-.db $5A $05 $32 $FE $3F $C3 $0B $01 $C5 $D5 $E5 $D9 $08 $F5 $C5 $D5
-.db $CD $5A $05 $32 $FE $3F $C3 $C9 $00 $C5 $D5 $E5 $08 $D9 $F5 $C5
-.db $D5 $CD $5A $05 $32 $FE $3F $C3 $43 $02 $DB $CD $B7 $28 $1D $E5
-.db $DB $DC $FE $FF $20 $12 $DB $DD $F6 $F0 $FE $FF $20 $0A $21 $F8
-.db $FF $34 $20 $07 $23 $34 $20 $03 $C3 $00 $00 $E1 $3E $87 $C9
+
+SonicInterruptHook: ; $500
+		di
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $0075
+	
+; More interrupt hooks, haven't checked which games
+_LABEL_50A_:	
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $0D17
+	
+_LABEL_513_:	
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $01F8
+	
+_LABEL_51C_:	
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $7FE9
+	
+_LABEL_525_:	
+		di
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $7FE9
+	
+_LABEL_52F_:	
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $010B
+	
+_LABEL_538_:	
+		push bc
+		push de
+		push hl
+		exx
+		ex af, af'
+		push af
+		push bc
+		push de
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $00c9
+    
+_LABEL_549_:	
+		push bc
+		push de
+		push hl
+		ex af, af'
+		exx
+		push af
+		push bc
+		push de
+		call SharedInterruptHook
+		ld ($3FFE), a
+		jp $0243
+	
+SharedInterruptHook:	
+		in a, (_PORT_CD_)
+		or a
+		jr z, +++
+		push hl
+		in a, (Port_IOPort1)
+		cp $FF
+		jr nz, +
+		in a, (Port_IOPort2)
+		or $F0
+		cp $FF
+		jr nz, +
+		ld hl, _RAM_FFF8_
+		inc (hl)
+		jr nz, ++
+		inc hl
+		inc (hl)
+		jr nz, ++
++:	
+		jp _LABEL_0_
+	
+++:	
+		pop hl
++++:	
+		ld a, $87
+		ret
+    
 .dsb 179, $FF
 
 ; 6th entry of Pointer Table from 17D (indexed by unknown)
@@ -902,8 +981,8 @@ _LABEL_1441_:
 	ld de, $0000
 	ld c, $00
 	ld a, (ix-7)
-	out (_PORT_61_), a
-	in a, (_PORT_62_)
+	out (_PORT_61_MapperLowByte), a
+	in a, (_PORT_62_MapperHighByte)
 	and $E0
 	ld c, a
 	ld a, b
@@ -919,7 +998,7 @@ _LABEL_1441_:
 	ld c, a
 	ld a, b
 	or c
-	out (_PORT_62_), a
+	out (_PORT_62_MapperHighByte), a
 	in a, (_PORT_8C_)
 	and $BF
 	ld c, a
@@ -934,10 +1013,10 @@ _LABEL_1441_:
 	ld a, c
 	or b
 	out (_PORT_8C_), a
-	in a, (_PORT_61_)
-	out (_PORT_CA_), a
-	in a, (_PORT_62_)
-	out (_PORT_CB_), a
+	in a, (_PORT_61_MapperLowByte)
+	out (_PORT_CA_MapperLowByteCopy), a
+	in a, (_PORT_62_MapperHighByte)
+	out (_PORT_CB_MapperHighByteCopy), a
 	ld a, (ix-11)
 	add a, $05
 	ld c, a
