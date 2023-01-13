@@ -150,7 +150,7 @@ _RAM_DFDF_ db
 .ende
 
 .enum $DFFF export
-_RAM_DFFF_ db
+_RAM_DFFF_PagingRegister2ReadOnly db
 .ende
 
 .enum $FFF8 export
@@ -158,9 +158,9 @@ _RAM_FFF8_ db
 .ende
 
 .enum $FFFD export
-_RAM_FFFD_ db
-_RAM_FFFE_ db
-_RAM_FFFF_ db
+_RAM_FFFD_PagingRegister0 db
+_RAM_FFFE_PagingRegister1 db
+_RAM_FFFF_PagingRegister2 db
 .ende
 
 ; Ports
@@ -194,7 +194,7 @@ _RAM_FFFF_ db
 
 _LABEL_0_:
 	di
-	jp _LABEL_D6_
+	jp _LABEL_D6_Startup
 
 ; Data from 4 to 37 (52 bytes)
 .db $FF $FF $FF $FF $C3 $47 $01 $FF $FF $FF $FF $FF $ED $4D $FF $FF
@@ -215,31 +215,37 @@ _LABEL_66_:
 .db $C3 $03 $C0 $FF $FF $FF $FF $FF
 
 ; Data from 70 to 81 (18 bytes)
-_DATA_70_:
+_DATA_70_VDPRegisterInitialisation:
 .db $16 $80 $A0 $81 $0E $82 $7E $85 $00 $86 $03 $87 $00 $88 $00 $89
 .db $C0 $8A
 
 ; Data from 82 to D5 (84 bytes)
-_DATA_82_:
+_DATA_82_BlackPalette:
 .dsb 32, $00
+
+
 .db $22 $09 $C0 $E1 $22 $FE $FF $2A $09 $C0 $C9 $22 $09 $C0 $ED $53
 .db $0B $C0 $32 $0D $C0 $E1 $5E $23 $56 $23 $7E $23 $E5 $2A $FE $FF
 .db $E5 $21 $A2 $00 $E5 $D5 $32 $FF $FF $3A $0D $C0 $ED $5B $0B $C0
 .db $2A $09 $C0 $C9
 
-_LABEL_D6_:
+_LABEL_D6_Startup:
 	di
 	im 1
 	ld hl, $4DED
 	ld (_RAM_C000_), hl
 	ld (_RAM_C003_), hl
 	ld sp, $DFF0
+  
+  ; Initialise Sega paging registers
 	ld a, $00
-	ld (_RAM_FFFD_), a
+	ld (_RAM_FFFD_PagingRegister0), a
 	inc a
-	ld (_RAM_FFFE_), a
+	ld (_RAM_FFFE_PagingRegister1), a
 	inc a
-	ld (_RAM_FFFF_), a
+	ld (_RAM_FFFF_PagingRegister2), a
+  
+  ; Mute PSG
 	ld a, $9F
 	out (_PORT_7E_), a
 	ld a, $BF
@@ -248,18 +254,24 @@ _LABEL_D6_:
 	out (_PORT_7E_), a
 	ld a, $FF
 	out (_PORT_7E_), a
+  
+  ; Initialise palette
 	ld a, $00
 	out (Port_VDPAddress), a
 	ld a, $C0
 	out (Port_VDPAddress), a
-	ld hl, _DATA_82_
+	ld hl, _DATA_82_BlackPalette
 	ld b, $20
 	ld c, Port_VDPData
 	otir
-	ld hl, _DATA_70_
+  
+  ; Initialise VDP registers
+	ld hl, _DATA_70_VDPRegisterInitialisation
 	ld b, $12
 	ld c, Port_VDPAddress
 	otir
+  
+  ; Blank VRAM
 	ld a, $00
 	out (Port_VDPAddress), a
 	ld a, $40
@@ -272,6 +284,8 @@ _LABEL_D6_:
 	jr nz, -
 	dec b
 	jr nz, -
+  
+  ; Set all sprite Ys to $d0 to disable sprites
 	ld a, $00
 	out (Port_VDPAddress), a
 	ld a, $7F
@@ -281,10 +295,15 @@ _LABEL_D6_:
 -:
 	out (Port_VDPData), a
 	djnz -
-	call _LABEL_1000_
--:
-	halt
+  
+	call _LABEL_1000_Main
+  
+  ; Loop forever
+-:halt
 	jr -
+
+
+
 
 ; Data from 147 to 152 (12 bytes)
 .db $FE $01 $C0 $7D $FE $0A $28 $2B $3A $06 $C0 $CB
@@ -518,7 +537,8 @@ _DATA_D38_:
 _DATA_F03_:
 .dsb 253, $FF
 
-_LABEL_1000_:
+_LABEL_1000_Main:
+  ; Clear system RAM
 	ld bc, _RAM_C000_
 	ld de, $0000
 -:
@@ -532,8 +552,8 @@ _LABEL_1000_:
 	inc bc
 	inc de
 	jp -
-
 +:
+
 	call _LABEL_3574_
 	ld a, $90
 	out (Port_VDPAddress), a
@@ -3244,7 +3264,7 @@ _LABEL_2EFB_:
 	ld a, (hl)
 	adc a, b
 	ld (hl), a
-	ld iy, _RAM_FFFF_
+	ld iy, _RAM_FFFF_PagingRegister2
 	ld (iy+0), $02
 	ld bc, (_DATA_B393_)
 	push bc
@@ -3337,7 +3357,7 @@ _LABEL_2EFB_:
 	call _LABEL_15CA_
 	pop af
 	pop af
-	ld iy, _RAM_FFFF_
+	ld iy, _RAM_FFFF_PagingRegister2
 	ld (iy+0), $02
 	ret
 
@@ -3452,7 +3472,7 @@ _LABEL_3042_:
 	ld iy, $000A
 	add iy, sp
 	ld sp, iy
-	ld iy, _RAM_FFFF_
+	ld iy, _RAM_FFFF_PagingRegister2
 	ld (iy+0), $02
 	ld (ix-2), $00
 	ld (ix-1), $00
@@ -3777,7 +3797,7 @@ _LABEL_3160_:
 	call _LABEL_15CA_
 	pop af
 	pop af
-	ld iy, _RAM_FFFF_
+	ld iy, _RAM_FFFF_PagingRegister2
 	ld (iy+0), $02
 	ld sp, ix
 	pop ix
@@ -3890,7 +3910,7 @@ _LABEL_33F7_:
 	ld a, (de)
 	ld e, a
 	ld d, $00
-	ld iy, _RAM_FFFF_
+	ld iy, _RAM_FFFF_PagingRegister2
 	ld a, e
 	ld (iy+0), a
 	ld a, (ix-10)
@@ -4026,7 +4046,7 @@ _LABEL_3537_:
 .dsb 9, $00
 .db $3A $0E $C0 $F6 $87 $32 $FE $3F $C3 $00 $00
 
--:
+_MutePSG:
 	ld a, $9F
 	out (Port_PSG), a
 	ld a, $BF
@@ -4038,7 +4058,7 @@ _LABEL_3537_:
 	ret
 
 _LABEL_3574_:
-	call -
+	call _MutePSG
 	ld a, $01
 	ld (_RAM_D73E_), a
 	ld (_RAM_D73C_), a
@@ -4058,10 +4078,10 @@ _LABEL_3589_:
 
 _LABEL_3594_:
 	ld b, a
-	ld a, (_RAM_DFFF_)
+	ld a, (_RAM_DFFF_PagingRegister2ReadOnly)
 	ld (_RAM_C13C_), a
 	ld a, $05
-	ld (_RAM_FFFF_), a
+	ld (_RAM_FFFF_PagingRegister2), a
 	ld hl, +	; Overriding return address
 	push hl
 	ld hl, (_DATA_14000_)
@@ -4070,7 +4090,7 @@ _LABEL_3594_:
 
 +:
 	ld a, (_RAM_C13C_)
-	ld (_RAM_FFFF_), a
+	ld (_RAM_FFFF_PagingRegister2), a
 	ret
 
 ; Data from 35B0 to 3817 (616 bytes)
